@@ -598,6 +598,263 @@ function AddMemberModal({ people, onAdd, onClose, prefillName }) {
   );
 }
 
+// ── Wizard (contribution flow) ────────────────────────────────────────────────
+function Wizard({ people, prefillName, anchorPersonId, onClose, onAdded }) {
+  const [step, setStep] = useState(1);
+  const TOTAL = 3;
+
+  const [name, setName] = useState(prefillName || '');
+  const [gender, setGender] = useState('M');
+  const [anchorId, setAnchorId] = useState(anchorPersonId || '');
+  const [anchorQuery, setAnchorQuery] = useState('');
+  const [relType, setRelType] = useState('child');
+  const [dob, setDob] = useState('');
+  const [status, setStatus] = useState('Alive');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [notes, setNotes] = useState('');
+  const [honeypot, setHoneypot] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+
+  // anchor search
+  const anchorMatches = useMemo(() => {
+    const q = anchorQuery.trim().toLowerCase();
+    if (!q) return [];
+    return people.filter(p => p.name.toLowerCase().includes(q)).slice(0, 6);
+  }, [anchorQuery, people]);
+
+  const anchorPerson = useMemo(() => people.find(p => p.id === anchorId), [anchorId, people]);
+
+  function next() { setError(''); setStep(s => Math.min(s + 1, TOTAL)); }
+  function back() { setError(''); setStep(s => Math.max(s - 1, 1)); }
+
+  async function submit() {
+    if (!name.trim()) { setError(T('err_name_required')); setStep(1); return; }
+    if (!anchorId) { setError(T('wiz_s2_title')); setStep(2); return; }
+    setSending(true); setError('');
+    const body = {
+      name: name.trim(), gender, dob: dob.trim(), status, photoUrl: photoUrl.trim(), notes: notes.trim(),
+      anchorId, anchorName: anchorPerson?.name || '', relType,
+      contributorName: '',
+      inviteToken: window.__INVITE || window.__TO || '',
+      lang: window.__LANG, honeypot,
+    };
+    const url = (window.CONFIG && window.CONFIG.APPS_SCRIPT_URL) || '';
+    try {
+      if (url) {
+        // Apps Script web apps: avoid CORS preflight by using text/plain.
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(body),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (j.ok === false) throw new Error(j.error || 'submission failed');
+      } else {
+        // Offline: queue locally so nothing is lost.
+        const q = JSON.parse(localStorage.getItem('ft_pending') || '[]');
+        q.push({ ts: Date.now(), ...body });
+        localStorage.setItem('ft_pending', JSON.stringify(q));
+      }
+      setDone(true);
+      if (onAdded) onAdded(body);
+    } catch (e) {
+      setError(T('wiz_err') + ' (' + e.message + ')');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function resetForAnother(prev) {
+    // Reuse just-added person as the implicit anchor for the next entry
+    setStep(1);
+    setName(''); setDob(''); setPhotoUrl(''); setNotes('');
+    setStatus('Alive'); setGender('M');
+    setError(''); setDone(false);
+    // The just-submitted person isn't in `people` yet (it's pending); leave anchor as-is
+    // so the contributor naturally re-anchors to their last entry's anchor (their spouse, etc.)
+  }
+
+  function whatsAppShare() {
+    const url = location.origin + location.pathname;
+    const msg = T('wa_share_msg', { url });
+    const wa = 'https://wa.me/?text=' + encodeURIComponent(msg);
+    window.open(wa, '_blank');
+  }
+
+  // ── Render ──
+  if (done) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-box" onClick={e => e.stopPropagation()}
+          style={{ width: 460, textAlign: 'center', padding: '36px 30px 28px' }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
+          <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 24, fontWeight: 600, letterSpacing: '-0.01em', marginBottom: 8 }}>{T('wiz_thanks_title')}</h2>
+          <p style={{ fontSize: 13.5, color: '#4a4d54', marginBottom: 22, lineHeight: 1.5 }}>{T('wiz_thanks_sub')}</p>
+          {!(window.CONFIG && window.CONFIG.APPS_SCRIPT_URL) && (
+            <p style={{ fontSize: 12, color: '#a4502b', background: '#fdf3ec', padding: '8px 12px', borderRadius: 8, marginBottom: 18 }}>
+              {T('wiz_offline')}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn" onClick={resetForAnother}>{T('wiz_add_another')}</button>
+            <button className="btn btn-ghost" onClick={whatsAppShare}>{T('wiz_share_whatsapp')}</button>
+            <button className="btn btn-ghost" onClick={onClose}>{T('wiz_done')}</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const stepHeader = (
+    <div style={{ fontSize: 11, color: '#8a8d94', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: 4 }}>
+      {T('wiz_step', { n: step, total: TOTAL })}
+    </div>
+  );
+
+  const progress = (
+    <div style={{ display: 'flex', gap: 4, marginBottom: 18 }}>
+      {Array.from({ length: TOTAL }).map((_, i) => (
+        <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < step ? '#15171a' : '#e3e1da' }} />
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ width: 460, padding: '28px 26px 24px' }}>
+        {stepHeader}
+        {progress}
+
+        {/* honeypot — invisible to humans, irresistible to bots */}
+        <input type="text" name={window.CONFIG?.HONEYPOT_FIELD || 'website'}
+          value={honeypot} onChange={e => setHoneypot(e.target.value)}
+          autoComplete="off" tabIndex={-1}
+          style={{ position: 'absolute', left: -9999, top: -9999, opacity: 0 }} />
+
+        {step === 1 && (
+          <>
+            <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em', marginBottom: 6 }}>{T('wiz_s1_title')}</h2>
+            <p style={{ fontSize: 13, color: '#8a8d94', marginBottom: 18 }}>{T('wiz_s1_sub')}</p>
+
+            <div className="form-row">
+              <input className="form-input" value={name} onChange={e => setName(e.target.value)}
+                placeholder={T('wiz_name_ph')} autoFocus style={{ fontSize: 16, padding: '14px 14px' }} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+              {['M', 'F'].map(g => (
+                <button key={g} type="button" onClick={() => setGender(g)}
+                  style={{
+                    padding: '14px', borderRadius: 10, cursor: 'pointer',
+                    fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 600,
+                    background: gender === g ? '#15171a' : '#fff',
+                    color: gender === g ? '#fff' : '#15171a',
+                    border: gender === g ? '1px solid #15171a' : '1px solid #e3e1da',
+                  }}>
+                  {g === 'M' ? T('male') : T('female')}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em', marginBottom: 6 }}>{T('wiz_s2_title')}</h2>
+            <p style={{ fontSize: 13, color: '#8a8d94', marginBottom: 18 }}>{T('wiz_s2_sub')}</p>
+
+            <div className="form-row">
+              <input className="form-input" value={anchorPerson ? anchorPerson.name : anchorQuery}
+                onChange={e => { setAnchorId(''); setAnchorQuery(e.target.value); }}
+                onFocus={() => { if (anchorPerson) { setAnchorQuery(anchorPerson.name); setAnchorId(''); } }}
+                placeholder={T('wiz_anchor_ph')} style={{ fontSize: 15, padding: '12px 14px' }} />
+              {anchorMatches.length > 0 && !anchorId && (
+                <div style={{ marginTop: 6, background: '#fff', border: '1px solid #e3e1da', borderRadius: 8, overflow: 'hidden' }}>
+                  {anchorMatches.map(p => (
+                    <div key={p.id} onClick={() => { setAnchorId(p.id); setAnchorQuery(''); }}
+                      style={{ padding: '10px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', justifyContent: 'space-between' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f6f5f2'}
+                      onMouseLeave={e => e.currentTarget.style.background = ''}>
+                      <span>{p.name}</span>
+                      <span style={{ fontSize: 11, color: '#8a8d94' }}>{p.family}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {anchorPerson && (
+              <div style={{ background: '#f6f5f2', padding: '14px 16px', borderRadius: 10, border: '1px solid #e3e1da', marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: '#8a8d94', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500, marginBottom: 10 }}>{T('wiz_rel_intro')}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {[['spouse', 'wiz_rel_spouse'], ['child', 'wiz_rel_child'], ['parent', 'wiz_rel_parent'], ['sibling', 'wiz_rel_sibling']].map(([v, k]) => (
+                    <button key={v} type="button" onClick={() => setRelType(v)}
+                      style={{
+                        padding: '10px', borderRadius: 8, cursor: 'pointer',
+                        fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 500,
+                        background: relType === v ? '#15171a' : '#fff',
+                        color: relType === v ? '#fff' : '#15171a',
+                        border: relType === v ? '1px solid #15171a' : '1px solid #e3e1da',
+                      }}>
+                      {T(k)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {step === 3 && (
+          <>
+            <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em', marginBottom: 6 }}>{T('wiz_s3_title')}</h2>
+            <p style={{ fontSize: 13, color: '#8a8d94', marginBottom: 18 }}>{T('wiz_s3_sub')}</p>
+
+            <div className="form-row">
+              <label>{T('wiz_dob_label')}</label>
+              <input className="form-input" value={dob} onChange={e => setDob(e.target.value)} placeholder={T('wiz_dob_ph')} />
+            </div>
+            <div className="form-row">
+              <label>{T('wiz_status_label')}</label>
+              <select className="form-input" value={status} onChange={e => setStatus(e.target.value)}>
+                <option value="Alive">{T('alive')}</option>
+                <option value="Deceased">{T('deceased')}</option>
+              </select>
+            </div>
+            <div className="form-row">
+              <label>{T('wiz_photo_label')}</label>
+              <input className="form-input" value={photoUrl} onChange={e => setPhotoUrl(e.target.value)} placeholder="https://…" />
+            </div>
+            <div className="form-row">
+              <label>{T('wiz_notes_label')}</label>
+              <input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} placeholder={T('field_notes_ph')} />
+            </div>
+          </>
+        )}
+
+        {error && <p style={{ color: '#c0392b', fontSize: 12, marginTop: 8 }}>{error}</p>}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 22 }}>
+          <button type="button" className="btn btn-ghost" onClick={step === 1 ? onClose : back}>
+            {step === 1 ? T('cancel') : T('wiz_back')}
+          </button>
+          {step < TOTAL && (
+            <button type="button" className="btn"
+              disabled={(step === 1 && !name.trim()) || (step === 2 && !anchorId)}
+              onClick={next}>{T('wiz_next')}</button>
+          )}
+          {step === TOTAL && (
+            <button type="button" className="btn" onClick={submit} disabled={sending}>
+              {sending ? T('wiz_sending') : T('wiz_submit')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 function Tooltip({ tip }) {
   if (!tip) return null;
@@ -727,11 +984,60 @@ function App() {
   const [highlightedIds, setHighlightedIds] = useState(null);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const [tooltip, setTooltip] = useState(null);
   const [collapsedIds, setCollapsedIds] = useState(new Set());
   const [transform, setTransform] = useState({ x: 80, y: 80, scale: 0.7 });
   const [toast, setToast] = useState(null);
   const fileInputRef = useRef(null);
+
+  // Fetch approved submissions + pending count on mount. Merges contributions
+  // into the in-memory tree so the visible tree always reflects approved adds.
+  useEffect(() => {
+    const url = window.CONFIG && window.CONFIG.APPS_SCRIPT_URL;
+    if (!url) return;
+    async function fetchAndMerge() {
+      try {
+        const r = await fetch(url + '?action=list', { method: 'GET' });
+        const j = await r.json();
+        if (j.pending != null) setPendingCount(j.pending);
+        if (Array.isArray(j.approved) && j.approved.length) {
+          let merged = 0;
+          for (const sub of j.approved) {
+            const existing = FD.people.find(p => p.name.trim().toLowerCase() === (sub.name || '').trim().toLowerCase());
+            if (existing) continue; // already merged in a prior session
+            const anchor = sub.anchorId ? FD.getPerson(sub.anchorId)
+                          : FD.people.find(p => p.name.trim().toLowerCase() === (sub.anchorName || '').trim().toLowerCase());
+            if (!anchor) continue;
+            FD.addMember({
+              name: sub.name,
+              gender: sub.gender || 'M',
+              dob: sub.dob || '',
+              status: sub.living || 'Alive',
+              photoUrl: sub.photoUrl || '',
+              notes: sub.notes || '',
+              family: anchor.family,
+            }, sub.relType || 'child', anchor.id);
+            merged++;
+          }
+          if (merged) {
+            setPeople([...FD.people]);
+            setRelationships([...FD.relationships]);
+            setLayout({ ...FD.layout });
+          }
+        }
+      } catch (e) {
+        console.warn('approved-fetch failed:', e);
+      }
+    }
+    fetchAndMerge();
+    const ms = (window.CONFIG && window.CONFIG.REFRESH_MS) || 0;
+    if (ms > 0) {
+      const id = setInterval(fetchAndMerge, ms);
+      return () => clearInterval(id);
+    }
+  }, []);
 
   // Welcome overlay — driven by ?to= (known member) or ?invite= (missing) or first visit.
   const welcomeMeta = useMemo(() => {
@@ -755,7 +1061,7 @@ function App() {
   }
   function openAddFlow() {
     dismissWelcome();
-    setShowModal(true);
+    setShowWizard(true);
   }
   function openFindFlow() {
     dismissWelcome();
@@ -982,7 +1288,16 @@ function App() {
           onClose={dismissWelcome}
         />
       )}
-      {!showWelcome && !showModal && <FloatingCTA onAdd={() => setShowModal(true)} onFind={openFindFlow} />}
+      {!showWelcome && !showModal && !showWizard && <FloatingCTA onAdd={() => setShowWizard(true)} onFind={openFindFlow} />}
+      {showWizard && (
+        <Wizard
+          people={people}
+          prefillName={welcomeMeta?.prefill}
+          anchorPersonId={selectedId || (welcomeMeta?.kind === 'known' ? welcomeMeta.targetId : null)}
+          onClose={() => setShowWizard(false)}
+          onAdded={() => { /* keep wizard open for "add another" */ }}
+        />
+      )}
 
       {toast && (
         <div style={{ position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)', background: toast.type === 'err' ? '#3a1010' : toast.type === 'warn' ? '#3a2a10' : '#15171a', color: '#fff', padding: '10px 16px', borderRadius: 10, fontSize: 13, fontFamily: 'Inter, sans-serif', fontWeight: 500, boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 500, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -998,6 +1313,12 @@ function App() {
         <span>{T('pill_families', { n: (layout.__families || []).length })}</span>
         <span className="sep"></span>
         <span>{T('pill_unions', { n: relationships.filter(r => r.type === 'spouse').length })}</span>
+        {pendingCount > 0 && (
+          <>
+            <span className="sep"></span>
+            <span style={{ color: '#c47a3d', fontWeight: 600 }}>{T('pill_pending', { n: pendingCount })}</span>
+          </>
+        )}
       </div>
     </div>
   );
