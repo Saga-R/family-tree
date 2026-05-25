@@ -485,33 +485,33 @@ function DetailPanel({ person, onClose, onNavigate }) {
             <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 20, color: '#15171a', fontWeight: 600, lineHeight: 1.15, letterSpacing: '-0.01em' }}>{person.name}</h2>
             <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
               <span className={person.gender === 'M' ? 'badge badge-male' : 'badge badge-female'}>
-                {person.gender === 'M' ? 'Male' : 'Female'}
+                {person.gender === 'M' ? T('male') : T('female')}
               </span>
               <span className="badge" style={{ color: STATUS_DOT[person.status] || '#8a8d94' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_DOT[person.status] || '#8a8d94', display: 'inline-block' }}></span>
-                {person.status || 'Unknown'}
+                {person.status === 'Alive' ? T('alive') : person.status === 'Deceased' ? T('deceased') : T('unknown')}
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      {person.dob && <div className="detail-row"><span className="detail-label">Born</span><span>{person.dob}</span></div>}
+      {person.dob && <div className="detail-row"><span className="detail-label">{T('born')}</span><span>{person.dob}</span></div>}
       {person.notes && <div style={{ background: '#f6f5f2', borderRadius: 8, padding: '10px 12px', fontSize: 12.5, color: '#4a4d54', marginBottom: 14, lineHeight: 1.5 }}>{person.notes}</div>}
 
       <div style={{ height: 1, background: '#e3e1da', margin: '14px 0' }} />
 
-      {spouseId && <div className="rel-section"><div className="rel-label">Spouse</div><RelLink id={spouseId} /></div>}
-      {parentIds.length > 0 && <div className="rel-section"><div className="rel-label">Parents</div>{parentIds.map(id => <RelLink key={id} id={id} />)}</div>}
-      {childIds.length > 0 && <div className="rel-section"><div className="rel-label">Children</div>{childIds.map(id => <RelLink key={id} id={id} />)}</div>}
-      {sibIds.length > 0 && <div className="rel-section"><div className="rel-label">Siblings</div>{sibIds.map(id => <RelLink key={id} id={id} />)}</div>}
+      {spouseId && <div className="rel-section"><div className="rel-label">{T('spouse')}</div><RelLink id={spouseId} /></div>}
+      {parentIds.length > 0 && <div className="rel-section"><div className="rel-label">{T('parents')}</div>{parentIds.map(id => <RelLink key={id} id={id} />)}</div>}
+      {childIds.length > 0 && <div className="rel-section"><div className="rel-label">{T('children')}</div>{childIds.map(id => <RelLink key={id} id={id} />)}</div>}
+      {sibIds.length > 0 && <div className="rel-section"><div className="rel-label">{T('siblings')}</div>{sibIds.map(id => <RelLink key={id} id={id} />)}</div>}
     </div>
   );
 }
 
 // ── AddMemberModal ────────────────────────────────────────────────────────────
-function AddMemberModal({ people, onAdd, onClose }) {
-  const [form, setForm] = useState({ name: '', gender: 'M', dob: '', status: 'Alive', notes: '', photoUrl: '' });
+function AddMemberModal({ people, onAdd, onClose, prefillName }) {
+  const [form, setForm] = useState({ name: prefillName || '', gender: 'M', dob: '', status: 'Alive', notes: '', photoUrl: '' });
   const [relType, setRelType] = useState('child');
   const [targetId, setTargetId] = useState(people[0]?.id || '');
   const [error, setError] = useState('');
@@ -519,65 +519,67 @@ function AddMemberModal({ people, onAdd, onClose }) {
 
   function submit(e) {
     e.preventDefault();
-    if (!form.name.trim()) { setError('Name is required.'); return; }
+    if (!form.name.trim()) { setError(T('err_name_required')); return; }
     onAdd({ ...form, name: form.name.trim() }, relType, targetId);
   }
 
   const REL = [
-    { v: 'spouse', l: 'Spouse of' },
-    { v: 'child', l: 'Child of' },
-    { v: 'parent', l: 'Parent of' },
-    { v: 'sibling', l: 'Sibling of' },
+    { v: 'spouse', l: T('rel_spouse_of') },
+    { v: 'child',  l: T('rel_child_of') },
+    { v: 'parent', l: T('rel_parent_of') },
+    { v: 'sibling', l: T('rel_sibling_of') },
   ];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 22, color: '#15171a', marginBottom: 4, fontWeight: 600, letterSpacing: '-0.01em' }}>Add Family Member</h2>
-        <p style={{ fontSize: 13, color: '#8a8d94', marginBottom: 22 }}>Define one relationship — all other connections will be inferred.</p>
+        <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 22, color: '#15171a', marginBottom: 4, fontWeight: 600, letterSpacing: '-0.01em' }}>{T('add_modal_title')}</h2>
+        <p style={{ fontSize: 13, color: '#8a8d94', marginBottom: 22 }}>{T('add_modal_sub')}</p>
         <form onSubmit={submit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-row" style={{ gridColumn: '1/-1' }}>
-              <label>Full Name *</label>
-              <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Priya Sharma" autoFocus />
+              <label>{T('field_name')}</label>
+              <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder={T('field_name_ph')} autoFocus />
             </div>
             <div className="form-row">
-              <label>Gender</label>
+              <label>{T('field_gender')}</label>
               <select className="form-input" value={form.gender} onChange={e => set('gender', e.target.value)}>
-                <option value="M">Male</option><option value="F">Female</option>
+                <option value="M">{T('male')}</option><option value="F">{T('female')}</option>
               </select>
             </div>
             <div className="form-row">
-              <label>Status</label>
+              <label>{T('field_status')}</label>
               <select className="form-input" value={form.status} onChange={e => set('status', e.target.value)}>
-                <option>Alive</option><option>Deceased</option><option>Unknown</option>
+                <option value="Alive">{T('alive')}</option>
+                <option value="Deceased">{T('deceased')}</option>
+                <option value="Unknown">{T('unknown')}</option>
               </select>
             </div>
             <div className="form-row">
-              <label>Date of Birth</label>
-              <input className="form-input" value={form.dob} onChange={e => set('dob', e.target.value)} placeholder="e.g. 1965" />
+              <label>{T('field_dob')}</label>
+              <input className="form-input" value={form.dob} onChange={e => set('dob', e.target.value)} placeholder={T('field_dob_ph')} />
             </div>
             <div className="form-row">
-              <label>Notes</label>
-              <input className="form-input" value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Born surname, etc." />
+              <label>{T('field_notes')}</label>
+              <input className="form-input" value={form.notes} onChange={e => set('notes', e.target.value)} placeholder={T('field_notes_ph')} />
             </div>
             <div className="form-row" style={{ gridColumn: '1/-1' }}>
-              <label>Photo URL (optional)</label>
+              <label>{T('field_photo')}</label>
               <input className="form-input" value={form.photoUrl} onChange={e => set('photoUrl', e.target.value)} placeholder="https://…" />
             </div>
           </div>
 
           <div style={{ background: '#f6f5f2', borderRadius: 10, padding: '14px 16px', margin: '14px 0 4px', border: '1px solid #e3e1da' }}>
-            <p style={{ fontSize: 11, color: '#8a8d94', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>Relationship</p>
+            <p style={{ fontSize: 11, color: '#8a8d94', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>{T('field_relationship')}</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
               <div className="form-row" style={{ margin: 0 }}>
-                <label>Type</label>
+                <label>{T('field_type')}</label>
                 <select className="form-input" value={relType} onChange={e => setRelType(e.target.value)}>
                   {REL.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
                 </select>
               </div>
               <div className="form-row" style={{ margin: 0 }}>
-                <label>Existing Member</label>
+                <label>{T('field_existing')}</label>
                 <select className="form-input" value={targetId} onChange={e => setTargetId(e.target.value)}>
                   {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
@@ -587,8 +589,8 @@ function AddMemberModal({ people, onAdd, onClose }) {
 
           {error && <p style={{ color: '#c0392b', fontSize: 12, marginTop: 8 }}>{error}</p>}
           <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
-            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn">Add to Tree</button>
+            <button type="button" className="btn btn-ghost" onClick={onClose}>{T('cancel')}</button>
+            <button type="submit" className="btn">{T('add_to_tree')}</button>
           </div>
         </form>
       </div>
@@ -605,12 +607,12 @@ function Tooltip({ tip }) {
     <div style={{ position: 'fixed', left: x + 16, top: y - 10, background: '#15171a', color: '#fff', borderRadius: 8, padding: '10px 12px', fontSize: 12, pointerEvents: 'none', zIndex: 400, fontFamily: 'Inter, sans-serif', lineHeight: 1.5, maxWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
       <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 3, letterSpacing: '-0.005em' }}>{person.name}</div>
       <div style={{ fontSize: 10, fontWeight: 500, letterSpacing: 1, textTransform: 'uppercase', color: '#9aa1ad', marginBottom: 4 }}>
-        {person.family} family
+        {person.family} {T('family')}
       </div>
       <div style={{ color: '#c8cbd0', fontSize: 11 }}>
-        {person.gender === 'M' ? 'Male' : 'Female'} · {person.status || 'Unknown'}
+        {person.gender === 'M' ? T('male') : T('female')} · {person.status === 'Alive' ? T('alive') : person.status === 'Deceased' ? T('deceased') : T('unknown')}
       </div>
-      {person.dob && <div style={{ color: '#9aa1ad', fontSize: 11 }}>b. {person.dob}</div>}
+      {person.dob && <div style={{ color: '#9aa1ad', fontSize: 11 }}>{T('tooltip_b')} {person.dob}</div>}
       {person.notes && <div style={{ color: '#9aa1ad', fontSize: 11, marginTop: 3 }}>{person.notes}</div>}
     </div>
   );
@@ -621,7 +623,7 @@ function Legend() {
   const fams = ['Daliya', 'Kalantri', 'Kasat'];
   return (
     <div className="legend">
-      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8a8d94', marginBottom: 8, fontWeight: 600 }}>Legend</div>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8a8d94', marginBottom: 8, fontWeight: 600 }}>{T('legend')}</div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {fams.map(f => {
@@ -634,14 +636,14 @@ function Legend() {
           );
         })}
         <div style={{ height: 1, background: '#e3e1da', margin: '4px 0' }} />
-        {[['#3b6fb5', 'Male'], ['#b53b72', 'Female']].map(([c, lbl]) => (
+        {[['#3b6fb5', T('male')], ['#b53b72', T('female')]].map(([c, lbl]) => (
           <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 3, height: 12, borderRadius: 1.5, background: c, marginLeft: 4, marginRight: 5 }}></span>
             <span>{lbl}</span>
           </div>
         ))}
         <div style={{ height: 1, background: '#e3e1da', margin: '4px 0' }} />
-        {[['#2f9e6f', 'Alive'], ['#a3a7ad', 'Deceased']].map(([c, lbl]) => (
+        {[['#2f9e6f', T('alive')], ['#a3a7ad', T('deceased')]].map(([c, lbl]) => (
           <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: c, marginLeft: 2, marginRight: 4 }}></span>
             <span>{lbl}</span>
@@ -652,8 +654,66 @@ function Legend() {
   );
 }
 
+// ── WelcomeOverlay ────────────────────────────────────────────────────────────
+function WelcomeOverlay({ kind, name, onAdd, onFind, onClose }) {
+  const title = kind === 'known'   ? T('welcome_known_title',   { name })
+              : kind === 'missing' ? T('welcome_missing_title', { name })
+              :                       T('welcome_generic_title');
+  const sub   = kind === 'known'   ? T('welcome_known_sub')
+              : kind === 'missing' ? T('welcome_missing_sub')
+              :                       T('welcome_generic_sub');
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()}
+        style={{ width: 440, textAlign: 'center', padding: '36px 30px 28px' }}>
+        <div style={{ fontSize: 44, marginBottom: 10 }}>🌳</div>
+        <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.01em', marginBottom: 10, lineHeight: 1.2 }}>{title}</h2>
+        <p style={{ fontSize: 14, color: '#4a4d54', marginBottom: 22, lineHeight: 1.5 }}>{sub}</p>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          {kind === 'known' && <button className="btn" onClick={onFind}>{T('welcome_cta_find')}</button>}
+          {kind !== 'known' && <button className="btn" onClick={onAdd}>{T('welcome_cta_add')}</button>}
+          <button className="btn btn-ghost" onClick={onClose}>{T('welcome_cta_browse')}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── FloatingCTA — always-visible "Are you in the tree?" pill ──────────────────
+function FloatingCTA({ onAdd, onFind }) {
+  return (
+    <div style={{
+      position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
+      background: '#15171a', color: '#fff', padding: '10px 12px 10px 16px',
+      borderRadius: 999, boxShadow: '0 10px 30px rgba(0,0,0,0.18)',
+      display: 'flex', alignItems: 'center', gap: 10, zIndex: 80,
+      fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 500,
+    }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 14 }}>👋</span>{T('are_you_in_tree')}
+      </span>
+      <button onClick={onAdd}
+        style={{ background: '#fff', color: '#15171a', border: 'none', padding: '6px 12px', borderRadius: 999, fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+        {T('add_me')}
+      </button>
+      <button onClick={onFind}
+        style={{ background: 'transparent', color: '#fff', border: '1px solid #4a4d54', padding: '6px 12px', borderRadius: 999, fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+        {T('find_me')}
+      </button>
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 function App() {
+  // Re-render on language toggle. T() reads from window.__LANG live.
+  const [, setLangVer] = useState(0);
+  useEffect(() => {
+    const on = () => setLangVer(v => v + 1);
+    window.addEventListener('ft-lang-change', on);
+    return () => window.removeEventListener('ft-lang-change', on);
+  }, []);
+
   const [people, setPeople] = useState([...FD.people]);
   const [relationships, setRelationships] = useState([...FD.relationships]);
   const [layout, setLayout] = useState({ ...FD.layout });
@@ -666,6 +726,43 @@ function App() {
   const [transform, setTransform] = useState({ x: 80, y: 80, scale: 0.7 });
   const [toast, setToast] = useState(null);
   const fileInputRef = useRef(null);
+
+  // Welcome overlay — driven by ?to= (known member) or ?invite= (missing) or first visit.
+  const welcomeMeta = useMemo(() => {
+    if (window.__TO) {
+      const p = FD.getPerson(window.__TO);
+      if (p) return { kind: 'known', name: p.name.split(' ')[0], targetId: p.id };
+    }
+    if (window.__INVITE) {
+      const first = window.__INVITE.split(/[-_\s]/)[0];
+      const name = first.charAt(0).toUpperCase() + first.slice(1);
+      return { kind: 'missing', name, prefill: window.__INVITE.replace(/[-_]/g, ' ') };
+    }
+    if (!localStorage.getItem('ft_seen')) return { kind: 'generic' };
+    return null;
+  }, []);
+  const [showWelcome, setShowWelcome] = useState(!!welcomeMeta);
+
+  function dismissWelcome() {
+    localStorage.setItem('ft_seen', '1');
+    setShowWelcome(false);
+  }
+  function openAddFlow() {
+    dismissWelcome();
+    setShowModal(true);
+  }
+  function openFindFlow() {
+    dismissWelcome();
+    setTimeout(() => document.querySelector('.search-input')?.focus(), 50);
+  }
+
+  // If invited as a known member, fly the canvas to their card after first render.
+  useEffect(() => {
+    if (welcomeMeta?.kind === 'known' && welcomeMeta.targetId) {
+      setTimeout(() => flyTo(welcomeMeta.targetId), 300);
+    }
+    // eslint-disable-next-line
+  }, []);
 
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase(); if (!q) return [];
@@ -815,11 +912,11 @@ function App() {
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative' }}>
 
       <div className="tree-header">
-        <h1><span className="dot"></span> Family Tree</h1>
+        <h1><span className="dot"></span> {T('app_title')}</h1>
 
         <div className="search-wrap">
           <input className="search-input" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search members…" />
+            placeholder={T('search_placeholder')} />
           {searchResults.length > 0 && (
             <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid #e3e1da', borderRadius: 10, zIndex: 300, boxShadow: '0 8px 24px rgba(20,20,20,0.08)', overflow: 'hidden' }}>
               {searchResults.map((p, i) => (
@@ -836,18 +933,22 @@ function App() {
         </div>
 
         <div className="zoom-controls">
-          <button className="zoom-btn" onClick={zoomOut} title="Zoom out">−</button>
-          <button className="zoom-btn" onClick={reset} title="Reset view">⌂</button>
-          <button className="zoom-btn" onClick={zoomIn} title="Zoom in">+</button>
+          <button className="zoom-btn" onClick={zoomOut} title={T('zoom_out')}>−</button>
+          <button className="zoom-btn" onClick={reset} title={T('zoom_reset')}>⌂</button>
+          <button className="zoom-btn" onClick={zoomIn} title={T('zoom_in')}>+</button>
         </div>
 
-        <button className="btn btn-ghost" onClick={() => fileInputRef.current?.click()} title="Import members from CSV">
+        <button className="btn btn-ghost" onClick={() => fileInputRef.current?.click()} title={T('import_csv')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 2 }}><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-          Import CSV
+          {T('import_csv')}
         </button>
         <input ref={fileInputRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }}
           onChange={e => { const f = e.target.files?.[0]; if (f) handleCsvImport(f); e.target.value = ''; }} />
-        <button className="btn" onClick={() => setShowModal(true)}>＋ Add Member</button>
+        <button className="btn" onClick={() => setShowModal(true)}>{T('add_member')}</button>
+        <button className="btn btn-ghost" onClick={() => window.setLang(window.__LANG === 'en' ? 'hi' : 'en')}
+          title="Switch language" style={{ minWidth: 64, justifyContent: 'center' }}>
+          {T('lang_toggle')}
+        </button>
       </div>
 
       <div className="canvas-wrap">
@@ -862,9 +963,19 @@ function App() {
         <DetailPanel person={FD.getPerson(selectedId)}
           onClose={() => handleSelect(null)} onNavigate={flyTo} />
       )}
-      {showModal && <AddMemberModal people={people} onAdd={handleAddMember} onClose={() => setShowModal(false)} />}
+      {showModal && <AddMemberModal people={people} onAdd={handleAddMember} onClose={() => setShowModal(false)} prefillName={welcomeMeta?.prefill} />}
       <Tooltip tip={tooltip} />
       <Legend />
+      {showWelcome && welcomeMeta && (
+        <WelcomeOverlay
+          kind={welcomeMeta.kind}
+          name={welcomeMeta.name}
+          onAdd={openAddFlow}
+          onFind={openFindFlow}
+          onClose={dismissWelcome}
+        />
+      )}
+      {!showWelcome && !showModal && <FloatingCTA onAdd={() => setShowModal(true)} onFind={openFindFlow} />}
 
       {toast && (
         <div style={{ position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)', background: toast.type === 'err' ? '#3a1010' : toast.type === 'warn' ? '#3a2a10' : '#15171a', color: '#fff', padding: '10px 16px', borderRadius: 10, fontSize: 13, fontFamily: 'Inter, sans-serif', fontWeight: 500, boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 500, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -875,11 +986,11 @@ function App() {
       )}
 
       <div className="footer-pill">
-        <span>{people.length} members</span>
+        <span>{T('pill_members', { n: people.length })}</span>
         <span className="sep"></span>
-        <span>{(layout.__families || []).length} families</span>
+        <span>{T('pill_families', { n: (layout.__families || []).length })}</span>
         <span className="sep"></span>
-        <span>{relationships.filter(r => r.type === 'spouse').length} unions</span>
+        <span>{T('pill_unions', { n: relationships.filter(r => r.type === 'spouse').length })}</span>
       </div>
     </div>
   );
