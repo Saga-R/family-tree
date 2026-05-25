@@ -338,7 +338,17 @@ This is enough to ship to 10 close cousins this week and start the flywheel.
 | Languages | Bilingual — English + हिन्दी, with an in-app toggle and `?lang=` URL param. |
 | Access | Public link, no password. |
 | Moderation | Sagar only. No delegated moderators. |
-| Notifications | Sagar posts the link in the family WhatsApp group manually. New-submission pings to Sagar's number only. |
+| Distribution | **One generic link** dropped in the family WhatsApp group. No personalised `?invite=` tokens going out. |
+| Notifications | New-submission pings to Sagar's number only. |
+
+### What "group-share only" changes
+- The personalised `?to=` / `?invite=` paths are still in the code (useful if you forward to one cousin later) — but they aren't part of the main flow.
+- The **generic welcome screen** is now the single conversion surface. It has to land FOMO in 4 seconds.
+  - Title: "**32 of us are in here. Are you?**"
+  - Two CTAs side-by-side: "**I'm missing — add me**" / "Find me in the tree" (so people who *are* in don't bounce)
+- The floating "Are you in the tree? [Add me] [Find me]" pill becomes critical — anyone who dismissed the welcome still has a persistent nudge.
+- The pending-submissions counter in the footer (once the backend lands) becomes the second nudge: "8 pending ✨" tells lurkers others are contributing.
+- We should plan to **re-share the link in the group** weekly with an updated stat: "**+7 new members this week — Karan, Vivaan, Pratiksha, Anuj, …** see if your branch is still incomplete: <link>". Each re-share generates a fresh wave of clicks.
 
 These constraints shape the MVP:
 

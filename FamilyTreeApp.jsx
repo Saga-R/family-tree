@@ -655,23 +655,29 @@ function Legend() {
 }
 
 // ── WelcomeOverlay ────────────────────────────────────────────────────────────
-function WelcomeOverlay({ kind, name, onAdd, onFind, onClose }) {
+function WelcomeOverlay({ kind, name, count, onAdd, onFind, onClose }) {
   const title = kind === 'known'   ? T('welcome_known_title',   { name })
               : kind === 'missing' ? T('welcome_missing_title', { name })
-              :                       T('welcome_generic_title');
+              :                       T('welcome_generic_title', { n: count });
   const sub   = kind === 'known'   ? T('welcome_known_sub')
               : kind === 'missing' ? T('welcome_missing_sub')
               :                       T('welcome_generic_sub');
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" onClick={e => e.stopPropagation()}
-        style={{ width: 440, textAlign: 'center', padding: '36px 30px 28px' }}>
+        style={{ width: 460, textAlign: 'center', padding: '36px 30px 28px' }}>
         <div style={{ fontSize: 44, marginBottom: 10 }}>🌳</div>
         <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.01em', marginBottom: 10, lineHeight: 1.2 }}>{title}</h2>
         <p style={{ fontSize: 14, color: '#4a4d54', marginBottom: 22, lineHeight: 1.5 }}>{sub}</p>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
           {kind === 'known' && <button className="btn" onClick={onFind}>{T('welcome_cta_find')}</button>}
-          {kind !== 'known' && <button className="btn" onClick={onAdd}>{T('welcome_cta_add')}</button>}
+          {kind === 'missing' && <button className="btn" onClick={onAdd}>{T('welcome_cta_add')}</button>}
+          {kind === 'generic' && (
+            <>
+              <button className="btn" onClick={onAdd}>{T('welcome_cta_add')}</button>
+              <button className="btn btn-ghost" onClick={onFind}>{T('welcome_cta_find')}</button>
+            </>
+          )}
           <button className="btn btn-ghost" onClick={onClose}>{T('welcome_cta_browse')}</button>
         </div>
       </div>
@@ -970,6 +976,7 @@ function App() {
         <WelcomeOverlay
           kind={welcomeMeta.kind}
           name={welcomeMeta.name}
+          count={people.length}
           onAdd={openAddFlow}
           onFind={openFindFlow}
           onClose={dismissWelcome}
