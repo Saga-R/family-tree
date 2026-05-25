@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Family Tree Visualiser</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --ink: #1b1d2a;
+    --muted: #6b7080;
+    --line: #d9dce5;
+    --accent: #4a5dd9;
+    --male: #4a90e2;
+    --female: #e27ba8;
+    --other: #8a8f9e;
+    --deceased-fg: #8a8f9e;
+    --shadow: 0 2px 10px rgba(20, 22, 40, 0.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  .app { display: grid; grid-template-columns: 1fr 340px; grid-template-rows: 56px 1fr; height: 100vh; }
+  .toolbar { grid-column: 1 / span 2; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: var(--shadow); z-index: 5; }
+  .toolbar h1 { font-size: 16px; margin: 0 16px 0 0; font-weight: 600; }
+  .toolbar .spacer { flex: 1; }
+  button, .btn { cursor: pointer; border: 1px solid var(--line); background: #fff; padding: 7px 12px; border-radius: 8px; font-size: 13px; color: var(--ink); }
+  button:hover, .btn:hover { background: #f2f3f8; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #3a4cc2; }
+  button.danger { color: #b83a3a; border-color: #e9c6c6; }
+  .canvas-wrap { position: relative; overflow: hidden; background: var(--bg); }
+  svg.tree { width: 100%; height: 100%; display: block; cursor: grab; }
+  svg.tree:active { cursor: grabbing; }
+  .sidebar { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 16px; }
+  .sidebar h2 { font-size: 14px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+  .field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  .field input, .field select { padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; background: #fff; }
+  .field.row { flex-direction: row; gap: 12px; align-items: center; }
+  .field.row label { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink); }
+  .legend { position: absolute; bottom: 12px; left: 12px; background: rgba(255,255,255,0.95); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 12px; box-shadow: var(--shadow); max-width: 240px; }
+  .legend h3 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.5px; }
+  .legend .row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  .legend .swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.08); }
+  .legend .fam-list { max-height: 140px; overflow-y: auto; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 10px; background: none; font-size: 13px; color: var(--muted); }
+  .tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-body { display: none; }
+  .tab-body.active { display: block; }
+  .person-card { display: flex; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fafbff; margin-bottom: 10px; align-items: center; }
+  .person-card .avatar { width: 40px; height: 40px; border-radius: 50%; background: #dfe2ef; color: #6b7080; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; flex-shrink: 0; overflow: hidden; }
+  .person-card .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .person-card .meta { flex: 1; min-width: 0; }
+  .person-card .meta strong { display: block; font-size: 13px; }
+  .person-card .meta small { color: var(--muted); font-size: 11px; }
+  .rel-list { margin: 8px 0 14px; font-size: 12px; }
+  .rel-list .group { margin-bottom: 6px; }
+  .rel-list .group b { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.4px; }
+  .rel-list a { display: inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); font-size: 12px; text-decoration: none; cursor: pointer; }
+  .rel-list a:hover { background: #f0f2fa; }
+  .empty { color: var(--muted); font-size: 12px; font-style: italic; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: -6px; margin-bottom: 10px; }
+  .file-input { display: none; }
+  /* SVG styles */
+  .node rect.card { fill: #fff; stroke: var(--line); stroke-width: 1.2; }
+  .node.selected rect.card { stroke: var(--accent); stroke-width: 2.2; }
+  .node.deceased rect.card { fill: #f2f3f8; stroke-dasharray: 4 3; }
+  .node text.name { font-weight: 600; font-size: 12px; fill: var(--ink); }
+  .node.deceased text.name { fill: var(--deceased-fg); }
+  .node text.sub { font-size: 10px; fill: var(--muted); }
+  .node .gender-bar { stroke-width: 0; }
+  .node .avatar-bg { fill: #e7e9f3; }
+  .node .initials { font-size: 13px; font-weight: 600; fill: #6b7080; text-anchor: middle; }
+  .node .cross { font-size: 14px; fill: var(--deceased-fg); font-weight: 700; }
+  .link { fill: none; stroke: #9aa0b4; stroke-width: 1.4; }
+  .link.marriage { stroke: #c07da0; stroke-width: 2; }
+  .hull { fill-opacity: 0.12; stroke-opacity: 0.45; stroke-width: 1.2; }
+  .hull-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; fill-opacity: 0.75; }
+  @media (max-width: 820px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 56px 1fr auto; }
+    .sidebar { border-left: 0; border-top: 1px solid var(--line); max-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="toolbar">
+    <h1>🌳 Family Tree</h1>
+    <button id="btn-import">Import CSV</button>
+    <button id="btn-export">Export CSV</button>
+    <button id="btn-sample">Reset to sample</button>
+    <button id="btn-clear" class="danger">Clear all</button>
+    <div class="spacer"></div>
+    <button id="btn-fit">Fit to view</button>
+    <input type="file" id="file-input" class="file-input" accept=".csv,text/csv" />
+  </div>
+
+  <div class="canvas-wrap">
+    <svg class="tree" id="tree"></svg>
+    <div class="legend">
+      <h3>Gender</h3>
+      <div class="row"><span class="swatch" style="background:var(--male)"></span>Male</div>
+      <div class="row"><span class="swatch" style="background:var(--female)"></span>Female</div>
+      <div class="row"><span class="swatch" style="background:var(--other)"></span>Other / unknown</div>
+      <h3 style="margin-top:8px">Status</h3>
+      <div class="row"><span class="swatch" style="background:#fff;border:1px solid var(--line)"></span>Alive</div>
+      <div class="row"><span class="swatch" style="background:#f2f3f8;border:1px dashed var(--line)"></span>Deceased (†)</div>
+      <h3 style="margin-top:8px">Origin families</h3>
+      <div class="fam-list" id="fam-list"></div>
+    </div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="add">Add member</button>
+      <button class="tab-btn" data-tab="inspect">Inspect</button>
+    </div>
+
+    <div class="tab-body active" id="tab-add">
+      <h2>Add new member</h2>
+      <div class="field"><label>Name</label><input id="f-name" type="text" placeholder="Full name" /></div>
+      <div class="field">
+        <label>Gender</label>
+        <div class="field row">
+          <label><input type="radio" name="gender" value="Male" checked /> Male</label>
+          <label><input type="radio" name="gender" value="Female" /> Female</label>
+          <label><input type="radio" name="gender" value="Other" /> Other</label>
+        </div>
+      </div>
+      <div class="field"><label>Date of birth</label><input id="f-dob" type="date" /></div>
+      <div class="field">
+        <label>Status</label>
+        <select id="f-status">
+          <option>Alive</option>
+          <option>Deceased</option>
+          <option>Unknown</option>
+        </select>
+      </div>
+      <div class="field"><label>Photo URL (optional)</label><input id="f-photo" type="url" placeholder="https://…" /></div>
+      <div class="field">
+        <label>Relationship to existing member</label>
+        <select id="f-rel">
+          <option value="">— none (new root) —</option>
+          <option>Spouse</option>
+          <option>Child</option>
+          <option>Parent</option>
+          <option>Father</option>
+          <option>Mother</option>
+          <option>Sibling</option>
+        </select>
+      </div>
+      <div class="field"><label>Select existing member</label><select id="f-member"></select></div>
+      <div class="hint">Adding one relationship is enough — siblings share parents automatically, and a child of a married person gets both spouses as parents.</div>
+      <button class="primary" id="btn-add">Add member</button>
+    </div>
+
+    <div class="tab-body" id="tab-inspect">
+      <h2>Selected member</h2>
+      <div id="inspect-body"><div class="empty">Click any node in the tree to inspect.</div></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+// ------------------------------------------------------------------
+// Storage
+// ------------------------------------------------------------------
+const STORAGE_KEY = 'familyTree.v1';
+const uid = (() => { let n = 0; return () => 'p' + (++n) + '_' + Math.random().toString(36).slice(2, 7); })();
+
+let state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+}
+function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+// ------------------------------------------------------------------
+// Sample CSV (embedded so the app works offline from file://)
+// ------------------------------------------------------------------
+const SAMPLE_CSV = `Name,Gender,Date of Birth,Status,Photo URL,Relationship to Existing Member,Select Member
+Asaramji Daliya,Male,,Alive,,,
+Shantadevi Daliya,Female,,Alive,,Spouse,Asaramji Daliya
+Ashok Daliya,Male,,Alive,,Child,Asaramji Daliya
+Santosh Daliya,Female,,Alive,,Spouse,Ashok Daliya
+Sagar Daliya,Male,,Alive,,Child,Ashok Daliya
+Shruti Daliya,Female,,Alive,,Sibling,Sagar Daliya
+Satyanarayan Kalantri,Male,,Alive,,Parent,Santosh Daliya
+Arun Daliya,Male,,Deceased,,Child,Asaramji Daliya
+Riya Kasat,Female,,Alive,,Spouse,Sagar Daliya
+Ramchandraji Daliya,Male,,Deceased,,Father,Narsinghdasji Daliya
+Narsinghdasji Daliya,Male,,Unknown,,Father,Asaramji Daliya
+Ratnibai Daliya,Female,,Unknown,,Mother,Asaramji Daliya
+Ramdayalji Daliya,Male,,Unknown,,Father,Ramchandraji Daliya
+Dhapibai Daliya,Female,,Unknown,,Wife,Ramchandraji Daliya
+`;
+
+// ------------------------------------------------------------------
+// CSV parse / serialize
+// ------------------------------------------------------------------
+function parseCSV(text) {
+  const rows = [];
+  let cur = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i+1] === '"') { field += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else field += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { cur.push(field); field = ''; }
+      else if (c === '\n') { cur.push(field); rows.push(cur); cur = []; field = ''; }
+      else if (c === '\r') { /* skip */ }
+      else field += c;
+    }
+  }
+  if (field.length || cur.length) { cur.push(field); rows.push(cur); }
+  return rows.filter(r => r.some(v => v && v.trim() !== ''));
+}
+
+function serializeCSV(rows) {
+  return rows.map(r => r.map(v => {
+    v = v == null ? '' : String(v);
+    if (/[",\n]/.test(v)) return '"' + v.replace(/"/g, '""') + '"';
+    return v;
+  }).join(',')).join('\n');
+}
+
+// ------------------------------------------------------------------
+// Data helpers
+// ------------------------------------------------------------------
+function newPerson(overrides = {}) {
+  return {
+    id: uid(),
+    name: '',
+    gender: 'Other',
+    dob: '',
+    status: 'Unknown',
+    photo: '',
+    parentIds: [],
+    spouseIds: [],
+    ...overrides,
+  };
+}
+
+function addUnique(arr, v) { if (v && !arr.includes(v)) arr.push(v); }
+function findByName(people, name) {
+  const n = name.trim().toLowerCase();
+  return people.find(p => p.name.trim().toLowerCase() === n);
+}
+
+// Apply a relationship between a newly-added person and an existing one.
+// Mutates the state.people array.
+function applyRelationship(person, rel, targetId) {
+  if (!rel || !targetId) return;
+  const target = state.people.find(p => p.id === targetId);
+  if (!target) return;
+  switch (rel) {
+    case 'Spouse':
+    case 'Wife':
+    case 'Husband':
+      addUnique(person.spouseIds, target.id);
+      addUnique(target.spouseIds, person.id);
+      break;
+    case 'Child':
+      addUnique(person.parentIds, target.id);
+      // add the target's first spouse as second parent, if present
+      if (target.spouseIds[0]) addUnique(person.parentIds, target.spouseIds[0]);
+      break;
+    case 'Parent':
+      addUnique(target.parentIds, person.id);
+      break;
+    case 'Father':
+      person.gender = 'Male';
+      addUnique(target.parentIds, person.id);
+      break;
+    case 'Mother':
+      person.gender = 'Female';
+      addUnique(target.parentIds, person.id);
+      break;
+    case 'Sibling':
+      if (target.parentIds.length) {
+        person.parentIds = [...target.parentIds];
+      } else {
+        // Create an anonymous placeholder parent so the sibling edge renders.
+        const placeholder = newPerson({ name: 'Unknown parent', gender: 'Other', status: 'Unknown' });
+        state.people.push(placeholder);
+        target.parentIds = [placeholder.id];
+        person.parentIds = [placeholder.id];
+      }
+      break;
+  }
+}
+
+// Import from CSV rows → replace state.
+function importCSV(text) {
+  const rows = parseCSV(text);
+  if (rows.length === 0) return;
+  const header = rows[0].map(s => s.trim().toLowerCase());
+  const col = n => header.indexOf(n);
+  const iName = col('name'), iGen = col('gender'), iDob = col('date of birth'),
+        iSt = col('status'), iPh = col('photo url'),
+        iRel = col('relationship to existing member'), iMem = col('select member');
+
+  state = { people: [] };
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const name = (row[iName] || '').trim();
+    if (!name) continue;
+    const p = newPerson({
+      name,
+      gender: (row[iGen] || 'Other').trim() || 'Other',
+      dob: (row[iDob] || '').trim(),
+      status: (row[iSt] || 'Unknown').trim() || 'Unknown',
+      photo: (row[iPh] || '').trim(),
+    });
+    state.people.push(p);
+    const rel = (row[iRel] || '').trim();
+    const member = (row[iMem] || '').trim();
+    if (rel && member) {
+      const target = findByName(state.people, member);
+      if (target) applyRelationship(p, rel, target.id);
+    }
+  }
+  saveState();
+  render();
+}
+
+// Export: flatten to CSV. Each person gets one "relationship" hint to help re-bootstrap.
+function exportCSV() {
+  const header = ['Name','Gender','Date of Birth','Status','Photo URL','Relationship to Existing Member','Select Member'];
+  const rows = [header];
+  const emitted = new Set();
+  // Topological-ish: parents first, spouses second, then others.
+  // Pick order: people with no parents + no spouses already emitted come first.
+  const order = [];
+  const pending = [...state.people];
+  while (pending.length) {
+    let idx = pending.findIndex(p =>
+      p.parentIds.every(id => emitted.has(id)) &&
+      p.spouseIds.every(id => emitted.has(id) || id === p.id)
+    );
+    if (idx < 0) idx = 0; // fallback: pick first
+    const p = pending.splice(idx, 1)[0];
+    order.push(p); emitted.add(p.id);
+  }
+  for (const p of order) {
+    let rel = '', mem = '';
+    if (p.parentIds[0]) {
+      const parent = state.people.find(x => x.id === p.parentIds[0]);
+      if (parent) { rel = 'Child'; mem = parent.name; }
+    } else if (p.spouseIds[0]) {
+      const sp = state.people.find(x => x.id === p.spouseIds[0]);
+      if (sp) { rel = 'Spouse'; mem = sp.name; }
+    }
+    rows.push([p.name, p.gender, p.dob, p.status, p.photo, rel, mem]);
+  }
+  return serializeCSV(rows);
+}
+
+// ------------------------------------------------------------------
+// Layout
+// ------------------------------------------------------------------
+const NODE_W = 170, NODE_H = 72, COUPLE_GAP = 14, H_GAP = 28, V_GAP = 70;
+
+function computeLayout(people) {
+  if (!people.length) return { units: [], width: 0, height: 0, families: [] };
+
+  const byId = new Map(people.map(p => [p.id, p]));
+
+  // Build couple units. Each person belongs to exactly one unit.
+  // If someone has multiple spouses, use the first for the primary unit; extra spouses handled as separate adjacent units (future work).
+  const unitOf = new Map(); // personId → unit
+  const units = [];
+  for (const p of people) {
+    if (unitOf.has(p.id)) continue;
+    const spouse = p.spouseIds.length ? byId.get(p.spouseIds[0]) : null;
+    let u;
+    if (spouse && !unitOf.has(spouse.id)) {
+      // Order couple so Male is left (purely visual default)
+      const left = p.gender === 'Female' && spouse.gender !== 'Female' ? spouse : p;
+      const right = left === p ? spouse : p;
+      u = { id: 'u' + units.length, members: [left, right], kind: 'couple' };
+      unitOf.set(left.id, u); unitOf.set(right.id, u);
+    } else {
+      u = { id: 'u' + units.length, members: [p], kind: 'single' };
+      unitOf.set(p.id, u);
+    }
+    units.push(u);
+  }
+
+  // Generation assignment: BFS from roots (no parents). A child's generation = max(parent unit gen) + 1.
+  // For a couple, the unit's gen = max(member gen). A spouse marrying in is pulled to partner's gen.
+  const gen = new Map(); // personId → int
+  // Seed: people with no parents start at gen 0.
+  for (const p of people) if (p.parentIds.length === 0) gen.set(p.id, 0);
+  // Iterate until stable
+  let changed = true, safety = 100;
+  while (changed && safety-- > 0) {
+    changed = false;
+    for (const p of people) {
+      const parentGens = p.parentIds.map(id => gen.get(id)).filter(v => v !== undefined);
+      if (parentGens.length) {
+        const g = Math.max(...parentGens) + 1;
+        if (gen.get(p.id) !== g) { gen.set(p.id, g); changed = true; }
+      } else if (!gen.has(p.id)) {
+        gen.set(p.id, 0); changed = true;
+      }
+    }
+    // Pull spouses in couple to same generation (max of the two)
+    for (const u of units) {
+      if (u.members.length < 2) continue;
+      const g = Math.max(...u.members.map(m => gen.get(m.id) || 0));
+      for (const m of u.members) if (gen.get(m.id) !== g) { gen.set(m.id, g); changed = true; }
+    }
+  }
+
+  // Unit generation = member generation (same for couples after above).
+  for (const u of units) u.gen = Math.max(...u.members.map(m => gen.get(m.id) || 0));
+
+  // Group units per generation.
+  const byGen = new Map();
+  for (const u of units) {
+    if (!byGen.has(u.gen)) byGen.set(u.gen, []);
+    byGen.get(u.gen).push(u);
+  }
+
+  // Sort: for each gen, try to keep children near their parents by sorting by parent-unit index.
+  // Start top-down.
+  const gens = [...byGen.keys()].sort((a, b) => a - b);
+  const unitIndex = new Map(); // unit.id → x-index within its gen
+
+  // initial placement by creation order
+  for (const g of gens) {
+    byGen.get(g).forEach((u, i) => unitIndex.set(u.id, i));
+  }
+
+  // Refine: for each gen below root, sort by avg parent-unit x.
+  for (let pass = 0; pass < 3; pass++) {
+    for (const g of gens) {
+      if (g === 0) continue;
+      const row = byGen.get(g).slice();
+      row.sort((a, b) => {
+        const ax = avgParentX(a), bx = avgParentX(b);
+        return ax - bx;
+      });
+      row.forEach((u, i) => unitIndex.set(u.id, i));
+      byGen.set(g, row);
+    }
+  }
+  function avgParentX(u) {
+    const parentUnits = new Set();
+    for (const m of u.members) {
+      for (const pid of m.parentIds) {
+        const pu = unitOf.get(pid);
+        if (pu) parentUnits.add(pu);
+      }
+    }
+    if (!parentUnits.size) return unitIndex.get(u.id) || 0;
+    let s = 0; for (const pu of parentUnits) s += unitIndex.get(pu.id) || 0;
+    return s / parentUnits.size;
+  }
+
+  // Assign x,y. Width of a unit = NODE_W * members.length + COUPLE_GAP * (members.length - 1)
+  for (const u of units) {
+    u.width = NODE_W * u.members.length + COUPLE_GAP * (u.members.length - 1);
+    u.height = NODE_H;
+  }
+
+  // Lay out each row horizontally, centred.
+  const rowWidths = new Map();
+  for (const g of gens) {
+    const row = byGen.get(g);
+    const w = row.reduce((a, u) => a + u.width, 0) + H_GAP * Math.max(0, row.length - 1);
+    rowWidths.set(g, w);
+  }
+  const totalW = Math.max(...rowWidths.values());
+  for (const g of gens) {
+    const row = byGen.get(g);
+    let x = (totalW - rowWidths.get(g)) / 2;
+    const y = g * (NODE_H + V_GAP);
+    for (const u of row) {
+      u.x = x; u.y = y;
+      // member positions
+      u.members.forEach((m, i) => {
+        m._x = x + i * (NODE_W + COUPLE_GAP);
+        m._y = y;
+      });
+      x += u.width + H_GAP;
+    }
+  }
+
+  // Family clustering via union-find on blood edges (parent↔child) only.
+  const parent = new Map();
+  function find(x) { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; }
+  function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); }
+  for (const p of people) parent.set(p.id, p.id);
+  for (const p of people) for (const pid of p.parentIds) if (byId.has(pid)) union(p.id, pid);
+  const famMap = new Map(); // rootId → list of people
+  for (const p of people) {
+    const r = find(p.id);
+    if (!famMap.has(r)) famMap.set(r, []);
+    famMap.get(r).push(p);
+  }
+
+  // Name each family after the eldest member (lowest generation) — use surname of first such member.
+  const palette = ['#6ea8fe', '#f7a072', '#9d7dd6', '#6ec28b', '#e27ba8', '#d6b66e', '#7dc7d6', '#c19ae0'];
+  const families = [];
+  let ci = 0;
+  for (const [rootId, list] of famMap.entries()) {
+    if (list.length < 2) continue; // skip lone marry-ins for clustering
+    list.sort((a, b) => (gen.get(a.id) || 0) - (gen.get(b.id) || 0));
+    const eldest = list[0];
+    const surname = (eldest.name.split(/\s+/).slice(-1)[0]) || eldest.name;
+    families.push({ rootId, members: list, color: palette[ci % palette.length], label: surname });
+    ci++;
+  }
+
+  return { units, width: totalW, height: (gens.length) * (NODE_H + V_GAP), families, unitOf, gen };
+}
+
+// ------------------------------------------------------------------
+// Rendering
+// ------------------------------------------------------------------
+const svg = d3.select('#tree');
+const gRoot = svg.append('g').attr('class', 'root');
+const gHulls = gRoot.append('g').attr('class', 'hulls');
+const gLinks = gRoot.append('g').attr('class', 'links');
+const gNodes = gRoot.append('g').attr('class', 'nodes');
+
+const zoom = d3.zoom().scaleExtent([0.2, 2.5]).on('zoom', (ev) => {
+  gRoot.attr('transform', ev.transform);
+});
+svg.call(zoom);
+
+let selectedId = null;
+
+function render() {
+  saveState();
+  renderSidebar();
+  const people = state?.people || [];
+  const layout = computeLayout(people);
+
+  // Hulls (origin families): draw a rounded rect enclosing all member nodes.
+  const hulls = gHulls.selectAll('g.hull-group').data(layout.families, d => d.rootId);
+  hulls.exit().remove();
+  const hEnter = hulls.enter().append('g').attr('class', 'hull-group');
+  hEnter.append('rect').attr('class', 'hull').attr('rx', 20).attr('ry', 20);
+  hEnter.append('text').attr('class', 'hull-label');
+  const hMerged = hEnter.merge(hulls);
+  hMerged.select('rect.hull')
+    .attr('x', d => Math.min(...d.members.map(m => m._x)) - 14)
+    .attr('y', d => Math.min(...d.members.map(m => m._y)) - 22)
+    .attr('width', d => Math.max(...d.members.map(m => m._x + NODE_W)) - Math.min(...d.members.map(m => m._x)) + 28)
+    .attr('height', d => Math.max(...d.members.map(m => m._y + NODE_H)) - Math.min(...d.members.map(m => m._y)) + 36)
+    .attr('fill', d => d.color)
+    .attr('stroke', d => d.color);
+  hMerged.select('text.hull-label')
+    .attr('x', d => Math.min(...d.members.map(m => m._x)) - 6)
+    .attr('y', d => Math.min(...d.members.map(m => m._y)) - 8)
+    .attr('fill', d => d.color)
+    .text(d => d.label + ' family');
+
+  // Build edge list:
+  //   marriage: horizontal line between spouse midpoints (per couple unit)
+  //   parent→child: from couple midpoint (or single parent midpoint) down to child's top
+  const marriageLinks = [];
+  const parentChildLinks = [];
+  for (const u of layout.units) {
+    if (u.kind === 'couple') {
+      const [a, b] = u.members;
+      marriageLinks.push({
+        x1: a._x + NODE_W, y1: a._y + NODE_H / 2,
+        x2: b._x, y2: b._y + NODE_H / 2,
+        id: u.id
+      });
+    }
+  }
+  // For parent→child, group children by parent-unit.
+  const byId = new Map(people.map(p => [p.id, p]));
+  const childrenByParentUnit = new Map();
+  for (const p of people) {
+    if (!p.parentIds.length) continue;
+    // Use the primary parent-unit as the anchor (the unit containing parentIds[0]).
+    const anchorParent = byId.get(p.parentIds[0]);
+    if (!anchorParent) continue;
+    const u = layout.unitOf.get(anchorParent.id);
+    if (!u) continue;
+    if (!childrenByParentUnit.has(u.id)) childrenByParentUnit.set(u.id, { unit: u, kids: [] });
+    childrenByParentUnit.get(u.id).kids.push(p);
+  }
+
+  for (const { unit, kids } of childrenByParentUnit.values()) {
+    // Parent anchor: midpoint of couple / midpoint of single.
+    const members = unit.members;
+    const px = members.length === 2
+      ? (members[0]._x + NODE_W + members[1]._x) / 2
+      : members[0]._x + NODE_W / 2;
+    const py = members[0]._y + NODE_H;
+    // sibling bar y
+    const barY = py + V_GAP * 0.5;
+    kids.sort((a, b) => a._x - b._x);
+    // stem from parents down to bar
+    parentChildLinks.push({ kind: 'stem', d: `M${px},${py} L${px},${barY}` , id: unit.id + '-stem'});
+    // horizontal bar across kids
+    if (kids.length > 1) {
+      const x1 = kids[0]._x + NODE_W / 2;
+      const x2 = kids[kids.length - 1]._x + NODE_W / 2;
+      parentChildLinks.push({ kind: 'bar', d: `M${x1},${barY} L${x2},${barY}`, id: unit.id + '-bar' });
+    }
+    // drop to each child
+    for (const k of kids) {
+      const kx = k._x + NODE_W / 2;
+      parentChildLinks.push({ kind: 'drop', d: `M${kx},${barY} L${kx},${k._y}`, id: unit.id + '-' + k.id });
+    }
+  }
+
+  // Render links
+  const mSel = gLinks.selectAll('line.link.marriage').data(marriageLinks, d => d.id);
+  mSel.exit().remove();
+  mSel.enter().append('line').attr('class', 'link marriage')
+    .merge(mSel)
+    .attr('x1', d => d.x1).attr('y1', d => d.y1)
+    .attr('x2', d => d.x2).attr('y2', d => d.y2);
+
+  const pSel = gLinks.selectAll('path.link.parent').data(parentChildLinks, d => d.id);
+  pSel.exit().remove();
+  pSel.enter().append('path').attr('class', 'link parent')
+    .merge(pSel)
+    .attr('d', d => d.d);
+
+  // Render nodes
+  const nodes = gNodes.selectAll('g.node').data(people, d => d.id);
+  nodes.exit().remove();
+  const nEnter = nodes.enter().append('g').attr('class', 'node');
+  nEnter.append('rect').attr('class', 'card').attr('width', NODE_W).attr('height', NODE_H).attr('rx', 10).attr('ry', 10);
+  nEnter.append('rect').attr('class', 'gender-bar').attr('width', 6).attr('height', NODE_H).attr('rx', 3);
+  nEnter.append('circle').attr('class', 'avatar-bg').attr('r', 20).attr('cx', 30).attr('cy', NODE_H / 2);
+  nEnter.append('text').attr('class', 'initials').attr('x', 30).attr('y', NODE_H / 2 + 5);
+  nEnter.append('image').attr('class', 'avatar-img').attr('x', 10).attr('y', NODE_H / 2 - 20).attr('width', 40).attr('height', 40).attr('clip-path', 'circle(20px at 20px 20px)');
+  nEnter.append('text').attr('class', 'name').attr('x', 60).attr('y', NODE_H / 2 - 2);
+  nEnter.append('text').attr('class', 'sub').attr('x', 60).attr('y', NODE_H / 2 + 14);
+  nEnter.append('text').attr('class', 'cross').attr('x', NODE_W - 14).attr('y', 18).text('');
+
+  const nMerged = nEnter.merge(nodes)
+    .attr('transform', d => `translate(${d._x},${d._y})`)
+    .classed('deceased', d => d.status === 'Deceased')
+    .classed('selected', d => d.id === selectedId)
+    .on('click', (ev, d) => { selectedId = d.id; switchTab('inspect'); render(); });
+
+  nMerged.select('rect.gender-bar')
+    .attr('fill', d => d.gender === 'Male' ? 'var(--male)' : d.gender === 'Female' ? 'var(--female)' : 'var(--other)');
+  nMerged.select('text.name').text(d => d.name || '(unnamed)');
+  nMerged.select('text.sub').text(d => {
+    const parts = [];
+    if (d.dob) parts.push(d.dob);
+    if (d.status && d.status !== 'Unknown') parts.push(d.status);
+    return parts.join(' · ');
+  });
+  nMerged.select('text.cross').text(d => d.status === 'Deceased' ? '†' : '');
+  nMerged.select('text.initials').text(d => d.photo ? '' : initials(d.name));
+  nMerged.select('image.avatar-img').attr('href', d => d.photo || null).attr('visibility', d => d.photo ? 'visible' : 'hidden');
+
+  // Family legend in sidebar
+  const famList = document.getElementById('fam-list');
+  famList.innerHTML = layout.families.length
+    ? layout.families.map(f => `<div class="row"><span class="swatch" style="background:${f.color}"></span>${f.label}</div>`).join('')
+    : '<div style="color:var(--muted)">No families yet</div>';
+
+  // Update canvas size & fit on first render
+  if (!render._fittedOnce && people.length) {
+    fitToView(layout);
+    render._fittedOnce = true;
+  }
+}
+
+function initials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+}
+
+function fitToView(layout) {
+  const svgNode = svg.node();
+  if (!svgNode) return;
+  const W = svgNode.clientWidth, H = svgNode.clientHeight;
+  if (!layout || !layout.width) return;
+  const pad = 60;
+  const scale = Math.min(
+    (W - pad * 2) / layout.width,
+    (H - pad * 2) / layout.height,
+    1.2
+  );
+  const tx = (W - layout.width * scale) / 2;
+  const ty = pad;
+  svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+}
+
+// ------------------------------------------------------------------
+// Sidebar
+// ------------------------------------------------------------------
+function renderSidebar() {
+  // Populate "Select existing member" dropdown
+  const sel = document.getElementById('f-member');
+  const cur = sel.value;
+  sel.innerHTML = '';
+  for (const p of state.people) {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.name;
+    sel.appendChild(opt);
+  }
+  if (cur && state.people.some(p => p.id === cur)) sel.value = cur;
+
+  // Inspect panel
+  const body = document.getElementById('inspect-body');
+  if (!selectedId) {
+    body.innerHTML = '<div class="empty">Click any node in the tree to inspect.</div>';
+    return;
+  }
+  const p = state.people.find(x => x.id === selectedId);
+  if (!p) { body.innerHTML = '<div class="empty">Member not found.</div>'; return; }
+  const rel = (ids, label) => {
+    if (!ids.length) return '';
+    const links = ids.map(id => {
+      const t = state.people.find(x => x.id === id);
+      return t ? `<a data-jump="${t.id}">${t.name}</a>` : '';
+    }).join('');
+    return `<div class="group"><b>${label}</b><br>${links}</div>`;
+  };
+  const children = state.people.filter(x => x.parentIds.includes(p.id)).map(x => x.id);
+  const siblings = p.parentIds.length
+    ? state.people.filter(x => x.id !== p.id && x.parentIds.some(pid => p.parentIds.includes(pid))).map(x => x.id)
+    : [];
+  const avatar = p.photo
+    ? `<img src="${p.photo}" alt=""/>`
+    : initials(p.name);
+  body.innerHTML = `
+    <div class="person-card"><div class="avatar">${avatar}</div>
+      <div class="meta"><strong>${p.name}</strong>
+      <small>${[p.gender, p.dob, p.status].filter(Boolean).join(' · ')}</small></div></div>
+    <div class="rel-list">
+      ${rel(p.parentIds, 'Parents')}
+      ${rel(p.spouseIds, 'Spouse(s)')}
+      ${rel(children, 'Children')}
+      ${rel(siblings, 'Siblings')}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button id="btn-edit">Edit</button>
+      <button id="btn-delete" class="danger">Delete</button>
+    </div>
+    <div id="edit-form"></div>
+  `;
+  body.querySelectorAll('a[data-jump]').forEach(a => a.addEventListener('click', () => {
+    selectedId = a.getAttribute('data-jump'); render();
+  }));
+  document.getElementById('btn-edit').addEventListener('click', () => openEditForm(p));
+  document.getElementById('btn-delete').addEventListener('click', () => deletePerson(p.id));
+}
+
+function openEditForm(p) {
+  const host = document.getElementById('edit-form');
+  host.innerHTML = `
+    <h2 style="margin-top:16px">Edit</h2>
+    <div class="field"><label>Name</label><input id="e-name" value="${escapeAttr(p.name)}"/></div>
+    <div class="field"><label>Gender</label>
+      <select id="e-gender">
+        ${['Male','Female','Other'].map(g => `<option ${p.gender === g ? 'selected' : ''}>${g}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field"><label>DOB</label><input id="e-dob" type="date" value="${escapeAttr(p.dob)}"/></div>
+    <div class="field"><label>Status</label>
+      <select id="e-status">
+        ${['Alive','Deceased','Unknown'].map(s => `<option ${p.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field"><label>Photo URL</label><input id="e-photo" value="${escapeAttr(p.photo)}"/></div>
+    <button class="primary" id="btn-save">Save</button>
+  `;
+  document.getElementById('btn-save').addEventListener('click', () => {
+    p.name = document.getElementById('e-name').value.trim() || p.name;
+    p.gender = document.getElementById('e-gender').value;
+    p.dob = document.getElementById('e-dob').value;
+    p.status = document.getElementById('e-status').value;
+    p.photo = document.getElementById('e-photo').value.trim();
+    render();
+  });
+}
+
+function escapeAttr(s) { return (s || '').toString().replace(/"/g, '&quot;'); }
+
+function deletePerson(id) {
+  if (!confirm('Delete this member? Blood relationships referencing them will be cleaned up.')) return;
+  state.people = state.people.filter(p => p.id !== id);
+  for (const p of state.people) {
+    p.parentIds = p.parentIds.filter(x => x !== id);
+    p.spouseIds = p.spouseIds.filter(x => x !== id);
+  }
+  if (selectedId === id) selectedId = null;
+  render();
+}
+
+// ------------------------------------------------------------------
+// Tab switching
+// ------------------------------------------------------------------
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-body').forEach(b => b.classList.toggle('active', b.id === 'tab-' + name));
+}
+document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+// ------------------------------------------------------------------
+// Toolbar actions
+// ------------------------------------------------------------------
+document.getElementById('btn-import').addEventListener('click', () => document.getElementById('file-input').click());
+document.getElementById('file-input').addEventListener('change', (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { importCSV(r.result); render._fittedOnce = false; render(); };
+  r.readAsText(f);
+  ev.target.value = '';
+});
+document.getElementById('btn-export').addEventListener('click', () => {
+  const csv = exportCSV();
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'family-tree.csv';
+  a.click();
+});
+document.getElementById('btn-sample').addEventListener('click', () => {
+  if (!confirm('Replace current tree with the sample data?')) return;
+  importCSV(SAMPLE_CSV);
+  render._fittedOnce = false; render();
+});
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if (!confirm('Remove all members?')) return;
+  state = { people: [] }; selectedId = null; saveState(); render();
+});
+document.getElementById('btn-fit').addEventListener('click', () => {
+  const layout = computeLayout(state.people); fitToView(layout);
+});
+
+// ------------------------------------------------------------------
+// Add-member form
+// ------------------------------------------------------------------
+document.getElementById('btn-add').addEventListener('click', () => {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { alert('Name is required.'); return; }
+  const gender = document.querySelector('input[name="gender"]:checked').value;
+  const dob = document.getElementById('f-dob').value;
+  const status = document.getElementById('f-status').value;
+  const photo = document.getElementById('f-photo').value.trim();
+  const rel = document.getElementById('f-rel').value;
+  const mem = document.getElementById('f-member').value;
+  const p = newPerson({ name, gender, dob, status, photo });
+  state.people.push(p);
+  if (rel && mem) applyRelationship(p, rel, mem);
+  // Reset form
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-dob').value = '';
+  document.getElementById('f-photo').value = '';
+  document.getElementById('f-rel').value = '';
+  selectedId = p.id;
+  switchTab('inspect');
+  render();
+});
+
+// ------------------------------------------------------------------
+// Bootstrap
+// ------------------------------------------------------------------
+if (!state || !state.people || !state.people.length) {
+  importCSV(SAMPLE_CSV);
+} else {
+  render();
+}
+window.addEventListener('resize', () => { /* re-fit if desired */ });
+</script>
+</body>
+</html>

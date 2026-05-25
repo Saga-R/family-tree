@@ -1,0 +1,15 @@
+Name,Gender,Date of Birth,Status,Photo URL,Relationship to Existing Member,Select Member
+Asaramji Daliya,Male,,Alive,,,
+Shantadevi Daliya,Female,,Alive,,Spouse,Asaramji Daliya
+Ashok Daliya,Male,,Alive,,Child,Asaramji Daliya
+Santosh Daliya,Female,,Alive,,Spouse,Ashok Daliya
+Sagar Daliya,Male,,Alive,,Child,Ashok Daliya
+Shruti Daliya,Female,,Alive,,Sibling,Sagar Daliya
+Satyanarayan Kalantri,Male,,Alive,,Parent,Santosh Daliya
+Arun Daliya,Male,,Deceased,,Child,Asaramji Daliya
+Riya Kasat,Female,,Alive,,Spouse,Sagar Daliya
+Ramchandraji Daliya,Male,,Deceased,,Father,Narsinghdasji Daliya
+Narsinghdasji Daliya ,Male,,,,Father,Asaramji Daliya
+Ratnibai Daliya,Female,,,,Mother,Asaramji Daliya
+Ramdayalji Daliya,Male,,,,Father,Ramchandraji Daliya
+Dhapibai Daliya,Female,,,,Wife,Ramchandraji Daliya
